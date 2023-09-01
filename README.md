@@ -17,6 +17,7 @@ to import the transactions
 - Infrastructure
   - Postgres, RabbitMQ
   - docker and docker-compose
+  - Kong API gateway
 
 ### Bank Reconciliation System - System architecture
 
