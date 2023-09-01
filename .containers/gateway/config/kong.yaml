@@ -1,0 +1,86 @@
+# a very minimal declarative config file
+_format_version: "2.1"
+_transform: true
+
+services:
+  - name: get_upload_url
+    id: f14a7e0d-5aeb-45c4-b9a3-701b51e5e90f
+    url: "http://upload_service:3000/upload-url"
+
+  - name: post_records
+    id: 0cb5d39d-0c29-4f64-9cd6-dd2a7358bf61
+    url: "http://upload_service:3000/records"
+
+  - name: get_record_status
+    id: 4f14ba6d-31d2-4b69-9b0e-57edb3df7533
+    url: "http://upload_service:3000/records/:id"
+
+routes:
+  - name: get_upload_url_route
+    service:
+      id: f14a7e0d-5aeb-45c4-b9a3-701b51e5e90f
+    paths:
+      - /upload-url
+    protocols:
+      - http
+  - name: post_records_route
+    service:
+      id: 0cb5d39d-0c29-4f64-9cd6-dd2a7358bf61
+    paths:
+      - /records
+    protocols:
+      - http
+  - name: get_record_status_route
+    service:
+      id: 4f14ba6d-31d2-4b69-9b0e-57edb3df7533
+    paths:
+      - /records/:id
+    protocols:
+      - http
+
+consumers:
+  - username: bank_abc
+    id: f5a7065f-8406-430d-8737-db13019790d3
+
+plugins:
+  - name: key-auth
+    enabled: true
+    config:
+      key_names:
+        - x-api-key
+
+  - name: rate-limiting
+    enabled: true
+    config:
+      minute: 5
+      policy: local
+
+  - name: request-size-limiting
+    enabled: true
+    config:
+      allowed_payload_size: 1
+      require_content_length: false
+
+  - name: cors
+    enabled: true
+    config:
+      origins:
+        - https://konghq.com
+        - http://localhost
+      methods:
+        - GET
+        - POST
+      headers:
+        - Accept
+        - Accept-Version
+        - Content-Length
+        - Content-MD5
+        - Content-Type
+
+# Configure for key-auth plugin
+keyauth_credentials:
+  - consumer: bank_abc
+    ttl: 300
+    tags:
+      - bank_abc-tag
+    key: 3954a858-a4c5-476b-bd37-15a460f06e12

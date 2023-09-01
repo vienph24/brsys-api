@@ -1,0 +1,115 @@
+version: '3'
+
+x-kong-config: &kong-env
+  KONG_DATABASE: ${KONG_DATABASE:-off}
+  KONG_PG_DATABASE: ${KONG_PG_DATABASE:-kong}
+  KONG_PG_HOST: db
+  KONG_PG_USER: ${KONG_PG_USER:-kong}
+  KONG_PG_PASSWORD_FILE: /run/secrets/kong_postgres_password
+
+services:
+  gateway:
+    image: "${KONG_DOCKER_TAG:-kong:latest}"
+    user: "${KONG_USER:-kong}"
+    environment:
+      <<: *kong-env
+      KONG_ADMIN_ACCESS_LOG: /dev/stdout
+      KONG_ADMIN_ERROR_LOG: /dev/stderr
+      KONG_PROXY_LISTEN: "${KONG_PROXY_LISTEN:-0.0.0.0:8000}"
+      KONG_ADMIN_LISTEN: "${KONG_ADMIN_LISTEN:-0.0.0.0:8001}"
+      KONG_PROXY_ACCESS_LOG: /dev/stdout
+      KONG_PROXY_ERROR_LOG: /dev/stderr
+      KONG_PREFIX: ${KONG_PREFIX:-/var/run/kong}
+      KONG_DECLARATIVE_CONFIG: "/opt/kong/kong.yaml"
+    networks:
+      - brsys-net
+    ports:
+      - "${KONG_INBOUND_PROXY_LISTEN:-0.0.0.0}:8000:8000/tcp"
+      - "${KONG_INBOUND_SSL_PROXY_LISTEN:-0.0.0.0}:8443:8443/tcp"
+      - "127.0.0.1:8001:8001/tcp"
+      - "127.0.0.1:8444:8444/tcp"
+    healthcheck:
+      test: [ "CMD", "kong", "health" ]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+    restart: on-failure
+    read_only: true
+    volumes:
+      - kong_prefix_vol:${KONG_PREFIX:-/var/run/kong}
+      - kong_tmp_vol:/tmp
+      - .containers/gateway/config:/opt/kong
+    security_opt:
+      - no-new-privileges
+
+  upload_service:
+    image: brsys/upload_service
+    container_name: upload_service
+    restart: on-failure
+    build:
+      context: .
+      dockerfile: .containers/api/Dockerfile
+    env_file: .env.development
+    environment:
+      NODE_ENV: 'production'
+    depends_on:
+      - db
+      - rabbitmq
+    networks:
+      - brsys-net
+
+  recorder_service:
+    image: brsys/recorder_service
+    container_name: recorder_service
+    restart: on-failure
+    build:
+      context: .
+      dockerfile: .containers/recorder/Dockerfile
+    env_file: .env.development
+    depends_on:
+      - db
+      - rabbitmq
+    networks:
+      - brsys-net
+
+  db:
+    container_name: db
+    image: postgres:15.3-alpine3.18
+    restart: always
+    env_file: .env.development
+    ports:
+      - '5433:5432'
+    volumes:
+      - ./.docker/db:/var/lib/postgresql/data
+    networks:
+      - brsys-net
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    restart: unless-stopped
+    ports:
+      - '5673:5672'
+      - '15672:15672'
+    volumes:
+      - 'rabbitmq_data:/bitnami/rabbitmq/mnesia'
+    env_file:
+      - .env.development
+    networks:
+      - brsys-net
+
+networks:
+  brsys-net:
+    external: false
+
+volumes:
+  rabbitmq_data:
+    driver: local
+  kong_data: { }
+  kong_prefix_vol:
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+  kong_tmp_vol:
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
